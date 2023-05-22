@@ -1,5 +1,3 @@
-use std::borrow::{Borrow, BorrowMut};
-
 use imgui_sdl2::ImguiSdl2;
 use sdl2::{video::Window, EventPump, Sdl, VideoSubsystem};
 extern crate gl;
@@ -8,22 +6,22 @@ extern crate imgui_opengl_renderer;
 extern crate imgui_sdl2;
 extern crate sdl2;
 
-pub struct Context {
-    pub sdl_context: Sdl,
+pub mod gui;
+
+pub struct Graphics {
+    pub sdl_ctx: Sdl,
     pub video: VideoSubsystem,
     pub window: Window,
     pub event_pump: EventPump,
-    pub imgui_renderer: imgui_opengl_renderer::Renderer,
-    pub imgui_sdl2_ctx: ImguiSdl2,
-    pub imgui_ctx: imgui::Context,
+    pub gui_ctx: gui::Gui,
     // needed so glcontext isnt disposed at end of function
     _gl_context: sdl2::video::GLContext,
 }
 
-impl Context {
-    pub fn new() -> Context {
-        let sdl_context = sdl2::init().unwrap();
-        let video = sdl_context.video().unwrap();
+impl Graphics {
+    pub fn new() -> Graphics {
+        let sdl_ctx = sdl2::init().unwrap();
+        let video = sdl_ctx.video().unwrap();
 
         {
             let gl_attr = video.gl_attr();
@@ -45,40 +43,27 @@ impl Context {
             .expect("Couldn't create GL context");
         gl::load_with(|s| video.gl_get_proc_address(s) as _);
 
-        let mut imgui = imgui::Context::create();
+        let gui_ctx = gui::Gui::new(&window);
 
-        let mut imgui_sdl2 = ImguiSdl2::new(&mut imgui, &window);
+        let mut event_pump = sdl_ctx.event_pump().unwrap();
 
-        let mut imgui_renderer =
-            imgui_opengl_renderer::Renderer::new(&mut imgui, |s| video.gl_get_proc_address(s) as _);
-
-        let mut event_pump = sdl_context.event_pump().unwrap();
-
-        Context {
-            sdl_context,
+        Graphics {
+            sdl_ctx,
             video,
             window,
             event_pump,
-            imgui_renderer,
-            imgui_sdl2_ctx: imgui_sdl2,
-            imgui_ctx: imgui,
+            gui_ctx,
             _gl_context,
         }
     }
 
     pub fn render(&mut self) {
-        self.imgui_sdl2_ctx.prepare_frame(self.imgui_ctx.io_mut(), &self.window, &self.event_pump.mouse_state());
-        let ui = self.imgui_ctx.borrow_mut().frame();
-
-        ui.show_demo_window(&mut true);
-
         unsafe {
             gl::ClearColor(1.0, 0.2, 0.2, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT);
         }
 
-        self.imgui_sdl2_ctx.prepare_render(&ui, &self.window);
-        self.imgui_renderer.render(&mut self.imgui_ctx);
+        self.gui_ctx.render(&self.window, &self.event_pump.mouse_state());
 
         self.window.gl_swap_window();
     }
@@ -86,7 +71,8 @@ impl Context {
     // Put in loop, returns true if main loop should be broken
     pub fn handle_events(&mut self) -> bool {
         for event in self.event_pump.poll_iter() {
-            self.imgui_sdl2_ctx.handle_event(&mut self.imgui_ctx, &event);
+            self.gui_ctx.handle_event(&event);
+
             match event {
                 sdl2::event::Event::Quit { .. }
                 | sdl2::event::Event::KeyDown {

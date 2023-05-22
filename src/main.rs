@@ -8,7 +8,7 @@ extern crate sdl2;
 use chip8_rs::graphics;
 
 fn main() {
-    let mut gfx_ctx = graphics::Context::new();
+    let mut gfx_ctx = graphics::Graphics::new();
 
     'running: loop {
         if gfx_ctx.handle_events() {
