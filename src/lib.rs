@@ -1,4 +1,5 @@
 use std::sync::{Mutex, Arc};
+use std::time::Instant;
 
 use notan::egui::{self, *};
 use notan::prelude::*;
@@ -43,8 +44,19 @@ impl DisplayBuffer {
         &mut self.buffer[1 - self.current_buffer]
     }
 
-    pub fn set_buffer(&mut self, index: usize, buffer: [[u8; 64]; 32]) {
-        self.buffer[index] = buffer;
+    /// Set the buffer at the given index, index -1 means current buffer, -2 means inactive buffer
+    pub fn set_buffer(&mut self, index: isize, buffer: [[u8; 64]; 32]) {
+        if index < 0 {
+            self.buffer[self.current_buffer] = buffer;
+            return;
+        }
+
+        if index < -1 {
+            self.buffer[1 - self.current_buffer] = buffer;
+            return;
+        }
+
+        self.buffer[index as usize] = buffer;
     }
 
     pub fn clear(&mut self, index: usize) {
@@ -53,13 +65,15 @@ impl DisplayBuffer {
 }
 
 pub struct DebugInfo {
-    pub ips: u64,
+    pub clock_speed: u64,
+    pub frame_time: f32,
 }
 
 impl DebugInfo {
     pub fn new() -> Self {
         Self {
-            ips: 0,
+            clock_speed: 0,
+            frame_time: 0.0,
         }
     }
 }
@@ -70,6 +84,9 @@ pub struct State {
     pub emulator_out_tex_id: egui::TextureId,
     pub display_buffer: Arc<Mutex<DisplayBuffer>>,
     pub debug_info: Arc<Mutex<DebugInfo>>,
+    pub emu_thread_handle: Option<std::thread::JoinHandle<isize>>,
+    pub last_frame: Instant,
+    // TODO: Add UI state to this so it can be edited from anywhere
 }
 
 impl State {
@@ -87,6 +104,8 @@ impl State {
             emulator_out_texture: render_texture,
             display_buffer: Arc::new(Mutex::new(DisplayBuffer::new())),
             debug_info: Arc::new(Mutex::new(DebugInfo::new())),
+            emu_thread_handle: None,
+            last_frame: Instant::now(),
         }
     }
 }

@@ -1,1 +1,3 @@
 /target
+/roms/*
+!/roms/test_opcode.ch8
