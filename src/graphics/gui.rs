@@ -1,6 +1,8 @@
 use imgui_sdl2::ImguiSdl2;
 use sdl2::video::Window;
 
+use super::Graphics;
+
 pub struct Gui {
     pub imgui_ctx: imgui::Context,
     pub imgui_renderer: imgui_opengl_renderer::Renderer,
@@ -12,17 +14,16 @@ impl Gui {
         let mut imgui_ctx = imgui::Context::create();
         imgui_ctx.set_ini_filename(None);
 
-        let mut imgui_sdl2 = ImguiSdl2::new(&mut imgui_ctx, &window);
+        let imgui_sdl2 = ImguiSdl2::new(&mut imgui_ctx, &window);
 
-        let mut imgui_renderer =
-            imgui_opengl_renderer::Renderer::new(&mut imgui_ctx, |s| {
-                window.subsystem().gl_get_proc_address(s) as _
-            });
+        let imgui_renderer = imgui_opengl_renderer::Renderer::new(&mut imgui_ctx, |s| {
+            window.subsystem().gl_get_proc_address(s) as _
+        });
 
         Gui {
             imgui_ctx,
             imgui_renderer,
-            imgui_sdl2
+            imgui_sdl2,
         }
     }
 
@@ -30,18 +31,19 @@ impl Gui {
         self.imgui_sdl2.handle_event(&mut self.imgui_ctx, event);
     }
 
-    pub fn render(&mut self, window: &Window, mouse_state: &sdl2::mouse::MouseState) {
-        self.imgui_sdl2.prepare_frame(self.imgui_ctx.io_mut(), &window, mouse_state);
-        let frame = self.imgui_ctx.new_frame();
+    pub fn render<F>(&mut self, gfx: &Graphics, mut closure: F)
+    where
+        F: FnMut(&imgui::Ui) -> bool,
+    {
+        self.imgui_sdl2.prepare_frame(self.imgui_ctx.io_mut(), &gfx.window, &gfx.event_pump.mouse_state());
+        
+        let frame = self.imgui_ctx.frame();
 
-        frame.show_demo_window(&mut true);
+        let show = closure(&frame);
 
-        unsafe {
-            gl::ClearColor(1.0, 0.2, 0.2, 1.0);
-            gl::Clear(gl::COLOR_BUFFER_BIT);
+        if show {
+            self.imgui_sdl2.prepare_render(&frame, &gfx.window);
+            self.imgui_renderer.render(&mut self.imgui_ctx);
         }
-
-        self.imgui_sdl2.prepare_render(&frame, &window);
-        self.imgui_renderer.render(&mut self.imgui_ctx);
     }
 }

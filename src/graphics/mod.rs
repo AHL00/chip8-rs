@@ -13,7 +13,6 @@ pub struct Graphics {
     pub video: VideoSubsystem,
     pub window: Window,
     pub event_pump: EventPump,
-    pub gui_ctx: gui::Gui,
     // needed so glcontext isnt disposed at end of function
     _gl_context: sdl2::video::GLContext,
 }
@@ -43,45 +42,23 @@ impl Graphics {
             .expect("Couldn't create GL context");
         gl::load_with(|s| video.gl_get_proc_address(s) as _);
 
-        let gui_ctx = gui::Gui::new(&window);
 
-        let mut event_pump = sdl_ctx.event_pump().unwrap();
+        let event_pump = sdl_ctx.event_pump().unwrap();
 
         Graphics {
             sdl_ctx,
             video,
             window,
             event_pump,
-            gui_ctx,
             _gl_context,
         }
     }
 
     pub fn render(&mut self) {
-        unsafe {
-            gl::ClearColor(1.0, 0.2, 0.2, 1.0);
-            gl::Clear(gl::COLOR_BUFFER_BIT);
-        }
-
-        self.gui_ctx.render(&self.window, &self.event_pump.mouse_state());
-
-        self.window.gl_swap_window();
+        // render queue?
     }
 
-    // Put in loop, returns true if main loop should be broken
-    pub fn handle_events(&mut self) -> bool {
-        for event in self.event_pump.poll_iter() {
-            self.gui_ctx.handle_event(&event);
-
-            match event {
-                sdl2::event::Event::Quit { .. }
-                | sdl2::event::Event::KeyDown {
-                    keycode: Some(sdl2::keyboard::Keycode::Escape),
-                    ..
-                } => { println!("Exiting..."); return true },
-                _ => {}
-            }
-        }
-        return false;
+    pub fn swap_window(&mut self) {
+        self.window.gl_swap_window();
     }
 }
