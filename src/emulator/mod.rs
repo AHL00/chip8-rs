@@ -1,0 +1,62 @@
+pub mod gpu;
+use std::{cell::RefCell, rc::Rc};
+
+use gpu::GPU;
+
+pub mod cpu;
+use cpu::CPU;
+
+pub struct Emulator {
+    cpu: CPU,
+    memory: Rc<RefCell<[u8; 4096]>>,
+    gpu: GPU,
+    pub ips: u32, // instr per second
+}
+
+impl Emulator {
+    pub fn new() -> Emulator {
+        let memory = Rc::new(RefCell::new([0; 4096]));
+        let cpu = CPU::new(memory.clone());
+        let gpu = GPU::new(memory.clone());
+        let ips = 1000;
+
+        // Font to memory
+        let font = [
+            0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+            0x20, 0x60, 0x20, 0x20, 0x70, // 1
+            0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+            0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+            0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+            0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+            0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+            0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+            0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+            0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+            0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+            0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+            0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+            0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+            0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+            0xF0, 0x80, 0xF0, 0x80, 0x80, // F
+        ];
+
+        memory.borrow_mut()[0x000..0x050].copy_from_slice(&font[0..0x050]);
+
+        Emulator {
+            cpu,
+            memory,
+            gpu,
+            ips,
+        }
+    }
+
+    pub fn load_rom(&mut self, rom: Vec<u8>) {
+        self.memory.borrow_mut()[0x200..0x200 + rom.len()].copy_from_slice(&rom);
+    }
+
+    pub fn cycle(&mut self) {
+        self.cpu.fetch();
+        self.cpu.decode();
+        self.cpu.execute();
+    }
+}

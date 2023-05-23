@@ -1,64 +1,77 @@
-use imgui_sdl2::ImguiSdl2;
-use sdl2::{video::Window, EventPump, Sdl, VideoSubsystem};
-extern crate gl;
-extern crate imgui;
-extern crate imgui_opengl_renderer;
-extern crate imgui_sdl2;
-extern crate sdl2;
+use notan::draw::*;
+use notan::egui::{self, *};
+use notan::prelude::*;
+
+use super::State;
 
 pub mod gui;
 
-pub struct Graphics {
-    pub sdl_ctx: Sdl,
-    pub video: VideoSubsystem,
-    pub window: Window,
-    pub event_pump: EventPump,
-    // needed so glcontext isnt disposed at end of function
-    _gl_context: sdl2::video::GLContext,
+pub fn render(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut State) {
+    // read buffer
+    let buffer = state
+        .display_buffer
+        .lock()
+        .unwrap()
+        .current_buffer()
+        .clone();
+
+    let mut draw = state.emulator_out_texture.create_draw();
+
+    draw.clear(Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    });
+
+    // draw the buffer to the render texture
+    for (i, row) in buffer.iter().enumerate() {
+        for (j, col) in row.iter().enumerate() {
+            if *col == 255 {
+                draw.rect((j as f32, i as f32), (1.0, 1.0));
+            }
+        }
+    }
+
+    gfx.render_to(&state.emulator_out_texture, &draw);
+
+    // create an egui output
+    let mut output = plugins.egui(|ctx| {
+        egui::Window::new("")
+            .title_bar(false)
+            .anchor(Align2::CENTER_CENTER, (0.0, 0.0))
+            .show(ctx, |ui| {
+                // draw the render texture to egui
+                let size: egui::Vec2 = state.emulator_out_texture.size().into();
+                ui.image(state.emulator_out_tex_id, (512.0, 256.0));
+            });
+
+        egui::Window::new("Debug")
+            .vscroll(false)
+            .hscroll(false)
+            .collapsible(true)
+            .default_width(100.0)
+            .anchor(Align2::LEFT_TOP, (0.0, 0.0))
+            .resizable(false)
+            .show(ctx, |ui| {
+                ui.add(Label::new(format!("IPS: {}", state.debug_info.lock().unwrap().ips)));
+            });
+    });
+
+    output.clear_color(Color::BLACK);
+    gfx.render(&output);
 }
 
-impl Graphics {
-    pub fn new() -> Graphics {
-        let sdl_ctx = sdl2::init().unwrap();
-        let video = sdl_ctx.video().unwrap();
-
-        {
-            let gl_attr = video.gl_attr();
-            gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
-            gl_attr.set_context_version(3, 0);
-        }
-
-        let window = video
-            .window("rust-imgui-sdl2 demo", 1000, 1000)
-            .position_centered()
-            .resizable()
-            .opengl()
-            .allow_highdpi()
-            .build()
-            .unwrap();
-
-        let _gl_context = window
-            .gl_create_context()
-            .expect("Couldn't create GL context");
-        gl::load_with(|s| video.gl_get_proc_address(s) as _);
-
-
-        let event_pump = sdl_ctx.event_pump().unwrap();
-
-        Graphics {
-            sdl_ctx,
-            video,
-            window,
-            event_pump,
-            _gl_context,
+fn test_buffer() -> [[u8; 64]; 32] {
+    // alternating colors
+    let mut buffer = [[0; 64]; 32];
+    for (i, row) in buffer.iter_mut().enumerate() {
+        for (j, col) in row.iter_mut().enumerate() {
+            if (i + j) % 2 == 0 {
+                *col = 255;
+            }
         }
     }
 
-    pub fn render(&mut self) {
-        // render queue?
-    }
-
-    pub fn swap_window(&mut self) {
-        self.window.gl_swap_window();
-    }
+    buffer
 }
