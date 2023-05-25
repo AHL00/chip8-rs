@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::DisplayBuffer;
+use super::gpu::GPU;
 
 pub struct CPU {
     pub idx: u16,
@@ -17,13 +17,13 @@ pub struct CPU {
     pub dly_timer: Arc<Mutex<u8>>,
     pub v_reg: [u8; 16],
     pub memory_ref: Rc<RefCell<[u8; 4096]>>,
-    pub display_buffer_ref: Arc<Mutex<DisplayBuffer>>,
+    pub gpu_ref: Rc<RefCell<GPU>>,
 }
 
 impl CPU {
     pub fn new(
         memory_ref: Rc<RefCell<[u8; 4096]>>,
-        display_buffer_ref: Arc<Mutex<DisplayBuffer>>,
+        gpu_ref: Rc<RefCell<GPU>>,
     ) -> CPU {
         let mut cpu = CPU {
             idx: 0,
@@ -34,9 +34,10 @@ impl CPU {
             snd_timer: Arc::new(Mutex::new(0)),
             v_reg: [0; 16],
             memory_ref,
-            display_buffer_ref,
+            gpu_ref,
         };
 
+        // For decrementing dly and snd timers
         cpu.start_timer_thread();
 
         cpu
@@ -94,8 +95,7 @@ impl CPU {
                     0x00E0 => {
                         // clear screen
                         println!("Clearing screen");
-                        self.display_buffer_ref.lock().unwrap().clear(0);
-                        self.display_buffer_ref.lock().unwrap().clear(1);
+                        self.gpu_ref.borrow_mut().clear_screen();
                     }
                     _ => {
                         println!("UNKOWN INSTRUCTION: {:X}", instr.opcode);
@@ -122,12 +122,13 @@ impl CPU {
                 // skip next instruction if VX != NN
                 println!("Skipping instruction if V{:X} != {:X}", instr.x, instr.nn);
                 if self.v_reg[instr.x as usize] != instr.nn {
-                    println!("Skipping instruction");
+                    //println!("Skipping instruction");
                     self.pc += 2;
                 }
             }
             0x5000 => {
                 // skip if registers are equal
+                println!("Skipping instruction if V{:X} == V{:X}", instr.x, instr.y);
                 if self.v_reg[instr.x as usize] == self.v_reg[instr.y as usize] {
                     println!("Skipping instruction");
                     self.pc += 2;
@@ -209,6 +210,7 @@ impl CPU {
                             "Right shifting V{:X} and storing in V{:X}, least sig in VF",
                             instr.y, instr.x
                         );
+                    
                         let least_sig = self.v_reg[instr.y as usize] & 0x1;
                         self.v_reg[instr.x as usize] = self.v_reg[instr.y as usize] >> 1;
                         self.v_reg[0xF] = least_sig;
@@ -284,7 +286,6 @@ impl CPU {
                 self.idx += self.v_reg[instr.x as usize] as u16;
             }
             0xD000 => {
-                // draw pixel
                 println!(
                     "Drawing sprite at ({:X}, {:X}) with height {:X}",
                     self.v_reg[instr.x as usize], self.v_reg[instr.y as usize], instr.n
@@ -293,57 +294,17 @@ impl CPU {
                 // reset VF
                 self.v_reg[0xF] = 0;
 
-                // get buffer
-                let mut buffer = self
-                    .display_buffer_ref
-                    .lock()
-                    .unwrap()
-                    .current_buffer()
-                    .clone();
-
                 // get coords
                 let mut coords: (u8, u8) =
                     (self.v_reg[instr.x as usize], self.v_reg[instr.y as usize]);
 
-                // if coords are over the screen, wrap them
-                coords.0 = coords.0 % 64;
-                coords.1 = 31 - (coords.1 % 32); // flip coords
+                let sprite: &[u8] = &self.memory_ref.borrow()[self.idx as usize..(self.idx + instr.n as u16) as usize];
 
-                for i in 0..instr.n {
-                    let sprite_row = self.memory_ref.borrow()[(self.idx + i as u16) as usize];
-
-                    for j in 0..8 {
-                        let sprite_pixel = (sprite_row >> (7 - j)) & 0x1;
-
-                        let b_idx_1 = (coords.1 - i) as usize; // y
-                        let b_idx_2 = (coords.0 + j) as usize; // x
-
-                        if b_idx_1 >= 32 {
-                            continue;
-                        } // y
-                        if b_idx_2 >= 64 {
-                            continue;
-                        } //x
-
-                        let pixel = buffer[b_idx_1][b_idx_2];
-
-                        if sprite_pixel == 1 {
-                            if pixel != 0 {
-                                self.v_reg[0xF] = 1;
-                                buffer[b_idx_1][b_idx_2] = 0;
-                            } else {
-                                buffer[b_idx_1][b_idx_2] = 255;
-                            }
-                        }
-                    }
+                if self.gpu_ref.borrow_mut().draw(coords, sprite) {
+                    self.v_reg[0xF] = 1;
                 }
-
+                
                 println!("VF: {}", self.v_reg[0xF]);
-
-                self.display_buffer_ref
-                    .lock()
-                    .unwrap()
-                    .set_buffer(-1, buffer);
             }
             0xC000 => {
                 // set VX to rand() & NN

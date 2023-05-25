@@ -11,7 +11,6 @@ use fixedstep::FixedStep;
 use notan::draw::*;
 use notan::egui::{self, *};
 use notan::prelude::*;
-use notan::random::rand;
 
 #[notan_main]
 fn main() -> Result<(), String> {
@@ -49,12 +48,25 @@ fn start(state: &mut State) {
     // display_buffer.lock().unwrap().swap_buffers();
 
     let emu_thread = std::thread::spawn(move || {
-        let mut emu = emulator::Emulator::new(display_buffer.clone());
+        let mut emu = emulator::Emulator::new(display_buffer.clone(), debug_info.clone());
 
         // Initialize the emulator
-        //emu.initialize("roms/test.ch8", 10);
-        emu.initialize("roms/test_opcode.ch8", 50);
-        //emu.initialize("roms/logo.ch8", 100);
+        emu.initialize("roms/ibm.ch8", 10);
+        //emu.initialize("roms/test_opcode.ch8", 1000000000);
+        //emu.initialize("roms/ibm.ch8", 3000);
+
+        // ask user input in console
+        // println!("Clock speed? (Hz): ");
+        // let mut input = String::new();
+        // let clock_input = std::io::stdin().read_line(&mut input).unwrap();
+        // let clock_speed = input.trim().parse::<u32>().unwrap();
+
+        // println!("Rom path?: ");
+        // input = String::new();
+        // let rom_input = std::io::stdin().read_line(&mut input).unwrap();
+        // let rom_path = input.trim();
+
+        // emu.initialize(rom_path, clock_speed);
 
         let mut loops_last_second = 0;
         let mut last_second = std::time::Instant::now();

@@ -7,43 +7,31 @@ use super::State;
 pub mod gui;
 
 pub fn render(app: &mut App, gfx: &mut Graphics, plugins: &mut Plugins, state: &mut State) {
-    if state.last_frame.elapsed().as_micros() > 16666 {
-        let frame_time = state.last_frame.elapsed().as_millis() as f32;
-        state.last_frame = std::time::Instant::now();
-        state.debug_info.lock().unwrap().frame_time = frame_time;
+    let display_buffer = state.display_buffer.lock().unwrap();
 
-        let mut display_buffer = state.display_buffer.lock().unwrap();
+    // read buffer
+    let buffer = display_buffer.current_buffer().clone();
 
-        // read buffer
-        let buffer = display_buffer.current_buffer().clone();
+    // draw the now inactive buffer to the render texture
+    let mut draw = state.emulator_out_texture.create_draw();
 
-        // // copy over to other buffer
-        // display_buffer.set_buffer(-2, buffer.clone());
+    draw.clear(Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    });
 
-        // // swap buffers
-        // display_buffer.swap_buffers();
-
-        // draw the now inactive buffer to the render texture
-        let mut draw = state.emulator_out_texture.create_draw();
-
-        draw.clear(Color {
-            r: 0.0,
-            g: 0.0,
-            b: 0.0,
-            a: 1.0,
-        });
-
-        // draw the buffer to the render texture
-        for (i, row) in buffer.iter().enumerate() {
-            for (j, col) in row.iter().enumerate() {
-                if *col == 255 {
-                    draw.rect((j as f32, i as f32), (1.0, 1.0));
-                }
+    // draw the buffer to the render texture
+    for (i, row) in buffer.iter().enumerate() {
+        for (j, col) in row.iter().enumerate() {
+            if *col == 255 {
+                draw.rect((j as f32, i as f32), (1.0, 1.0));
             }
         }
-
-        gfx.render_to(&state.emulator_out_texture, &draw);
     }
+
+    gfx.render_to(&state.emulator_out_texture, &draw);
 
     // create an egui output
     let mut output = plugins.egui(|ctx| {

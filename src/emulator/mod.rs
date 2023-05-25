@@ -6,21 +6,21 @@ use gpu::GPU;
 pub mod cpu;
 use cpu::CPU;
 
-use crate::DisplayBuffer;
+use crate::{DisplayBuffer, DebugInfo};
 
 pub struct Emulator {
-    cpu: CPU,
+    cpu: Rc<RefCell<CPU>>,
     memory: Rc<RefCell<[u8; 4096]>>,
-    gpu: GPU,
-    display_buffer: Arc<Mutex<DisplayBuffer>>,
+    gpu: Rc<RefCell<GPU>>,
+    debug_info: Arc<Mutex<DebugInfo>>,
     pub clock_speed: u32,
 }
 
 impl Emulator {
-    pub fn new(display_buffer: Arc<Mutex<DisplayBuffer>>) -> Emulator {
+    pub fn new(display_buffer: Arc<Mutex<DisplayBuffer>>, debug_info: Arc<Mutex<DebugInfo>>) -> Emulator {
         let memory = Rc::new(RefCell::new([0; 4096]));
-        let cpu = CPU::new(memory.clone(), display_buffer.clone());
-        let gpu = GPU::new(memory.clone());
+        let gpu = Rc::new(RefCell::new(GPU::new(memory.clone(), 60.0, display_buffer, debug_info.clone())));
+        let cpu = Rc::new(RefCell::new(CPU::new(memory.clone(), gpu.clone())));
         let clock_speed = 10;
 
         // Font to memory
@@ -49,7 +49,7 @@ impl Emulator {
             cpu,
             memory,
             gpu,
-            display_buffer,
+            debug_info,
             clock_speed,
         }
     }
@@ -66,13 +66,14 @@ impl Emulator {
     }
 
     pub fn initialize(&mut self, rom_path: &str, clock_speed: u32) {
-        self.cpu.pc = 0x200;
+        self.cpu.borrow_mut().pc = 0x200;
         self.load_rom_from_file(rom_path);
         self.clock_speed = clock_speed;
     }
 
     pub fn cycle(&mut self) {
-        self.cpu.fetch();
-        self.cpu.decode_execute();
+        let mut cpu = self.cpu.borrow_mut();
+        cpu.fetch();
+        cpu.decode_execute();
     }
 }

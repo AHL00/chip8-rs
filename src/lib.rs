@@ -1,8 +1,8 @@
 use std::sync::{Mutex, Arc};
 use std::time::Instant;
-
 use notan::egui::{self, *};
 use notan::prelude::*;
+use fixedstep::FixedStep;
 
 pub mod emulator;
 pub mod graphics;
@@ -86,6 +86,7 @@ pub struct State {
     pub debug_info: Arc<Mutex<DebugInfo>>,
     pub emu_thread_handle: Option<std::thread::JoinHandle<isize>>,
     pub last_frame: Instant,
+    pub render_timer: FixedStep,
     // TODO: Add UI state to this so it can be edited from anywhere
 }
 
@@ -106,6 +107,7 @@ impl State {
             debug_info: Arc::new(Mutex::new(DebugInfo::new())),
             emu_thread_handle: None,
             last_frame: Instant::now(),
+            render_timer: FixedStep::start(60.0).unlimit(),
         }
     }
 }
